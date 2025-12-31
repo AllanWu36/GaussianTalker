@@ -24,6 +24,12 @@ from arguments import ModelParams, PipelineParams, get_combined_args, ModelHidde
 from gaussian_renderer import GaussianModel
 import concurrent.futures
 from torch.utils.data import DataLoader
+import torch.multiprocessing as mp
+
+try:
+    mp.set_sharing_strategy('file_system')
+except RuntimeError:
+    pass
 
 def multithread_write(image_list, path):
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=None)

@@ -29,6 +29,8 @@ from utils.loader_utils import FineSampler, get_stamp_list
 import lpips
 import copy
 import wandb
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 to8b = lambda x : (255*np.clip(x.cpu().numpy(),0,1)).astype(np.uint8)
 
@@ -81,10 +83,12 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         viewpoint_stack = scene.getTrainCameras()
         if opt.custom_sampler is not None:
             sampler = FineSampler(viewpoint_stack)
-            viewpoint_stack_loader = DataLoader(viewpoint_stack, batch_size=batch_size,sampler=sampler,num_workers=32,collate_fn=list, drop_last = True)
+            # viewpoint_stack_loader = DataLoader(viewpoint_stack, batch_size=batch_size,sampler=sampler,num_workers=32,collate_fn=list, drop_last = True)
+            viewpoint_stack_loader = DataLoader(viewpoint_stack, batch_size=batch_size,sampler=sampler,num_workers=0,collate_fn=list, drop_last = True)
             random_loader = False
         else:
-            viewpoint_stack_loader = DataLoader(viewpoint_stack, batch_size=batch_size,shuffle=True,num_workers=32,collate_fn=list, drop_last = True)
+            # viewpoint_stack_loader = DataLoader(viewpoint_stack, batch_size=batch_size,shuffle=True,num_workers=32,collate_fn=list, drop_last = True)
+            viewpoint_stack_loader = DataLoader(viewpoint_stack, batch_size=batch_size,shuffle=True,num_workers=0,collate_fn=list, drop_last = True)
             random_loader = True
         loader = iter(viewpoint_stack_loader)
     
@@ -127,7 +131,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             except StopIteration:
                 print("reset dataloader into random dataloader.")
                 if not random_loader:
-                    viewpoint_stack_loader = DataLoader(viewpoint_stack, batch_size=opt.batch_size,shuffle=True,num_workers=32,collate_fn=list)
+                    # viewpoint_stack_loader = DataLoader(viewpoint_stack, batch_size=opt.batch_size,shuffle=True,num_workers=32,collate_fn=list)
+                    viewpoint_stack_loader = DataLoader(viewpoint_stack, batch_size=opt.batch_size,shuffle=True,num_workers=0,collate_fn=list)
                     random_loader = True
                 loader = iter(viewpoint_stack_loader)
 
