@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+python-multipart
+websockets
+numpy
+torch
+tensorflow==1.15.0

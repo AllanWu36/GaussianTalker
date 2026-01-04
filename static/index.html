@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GaussianTalker Live Stream</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 50px; background: #1a1a1a; color: #fff; }
+        #video-container { margin-top: 20px; border: 2px solid #333; width: 512px; height: 512px; background: #000; display: flex; align-items: center; justify-content: center; }
+        img { width: 100%; height: 100%; object-fit: contain; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 5px; }
+        button:disabled { background: #555; }
+        button.stop { background: #dc3545; }
+    </style>
+</head>
+<body>
+    <h1>GaussianTalker Live Inference</h1>
+    <div>
+        <button id="startBtn">Start Streaming</button>
+        <button id="stopBtn" disabled class="stop">Stop</button>
+    </div>
+    
+    <div id="video-container">
+        <img id="outputImage" src="" alt="Stream Output" />
+    </div>
+    <div id="status">Ready</div>
+
+    <script>
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const img = document.getElementById('outputImage');
+        const status = document.getElementById('status');
+        
+        let ws;
+        let audioContext;
+        let processor;
+        let source;
+        
+        startBtn.onclick = async () => {
+            status.innerText = "Connecting...";
+            ws = new WebSocket("ws://" + location.host + "/ws");
+            
+            ws.onopen = async () => {
+                status.innerText = "Connected! Waiting for audio...";
+                startAudio();
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            };
+            
+            ws.onmessage = (event) => {
+                // event.data is the base64 encoded jpeg
+                img.src = "data:image/jpeg;base64," + event.data;
+            };
+            
+            ws.onclose = () => {
+                status.innerText = "Disconnected";
+                stopAudio();
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            };
+
+            ws.onerror = (e) => {
+                console.error(e);
+                status.innerText = "Error encountered";
+            };
+        };
+        
+        stopBtn.onclick = () => {
+            if(ws) ws.close();
+        };
+        
+        async function startAudio() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                source = audioContext.createMediaStreamSource(stream);
+                
+                // Buffer size 4096. @16k, that's ~250ms. 
+                // Smaller = lower latency but more jitter processing.
+                // 2048 = 125ms.
+                processor = audioContext.createScriptProcessor(2048, 1, 1);
+                
+                source.connect(processor);
+                processor.connect(audioContext.destination);
+                
+                processor.onaudioprocess = (e) => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        const inputData = e.inputBuffer.getChannelData(0);
+                        // Convert float32 to int16
+                        const buffer = new ArrayBuffer(inputData.length * 2);
+                        const view = new DataView(buffer);
+                        for (let i = 0; i < inputData.length; i++) {
+                            // Clamp and scale
+                            let s = Math.max(-1, Math.min(1, inputData[i]));
+                            view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true); // little endian
+                        }
+                        ws.send(buffer);
+                    }
+                };
+            } catch (err) {
+                console.error(err);
+                status.innerText = "Microphone access denied or error: " + err.message;
+                if(ws) ws.close();
+            }
+        }
+        
+        function stopAudio() {
+            if (source) source.disconnect();
+            if (processor) processor.disconnect();
+            if (audioContext) audioContext.close();
+            source = null;
+            processor = null;
+            audioContext = null;
+        }
+    </script>
+</body>
+</html>
